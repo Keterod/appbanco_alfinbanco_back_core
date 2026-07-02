@@ -1,0 +1,42 @@
+# Render Blueprint — Core Mobile (FastAPI)
+# Para desplegar: Dashboard → Blueprints → New Blueprint Instance →
+#   selecciona este repositorio y la rama.
+services:
+  - type: web
+    name: core-mobile-banco
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    plan: free
+    autoDeploy: true
+    healthCheckPath: /
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: bd-core-mobile
+          property: connectionString
+      - key: DB_USE_SSL
+        value: require
+      - key: SECRET_KEY
+        generateValue: true
+      - key: ALGORITHM
+        value: HS256
+      - key: ACCESS_TOKEN_EXPIRE_MINUTES
+        value: "480"
+      - key: CORE_BACKEND_URL
+        value: http://localhost:8001
+      - key: CORE_DATABASE_URL
+        sync: false
+      - key: CORE_DB_USE_SSL
+        value: require
+      - key: PORT
+        value: "8003"
+
+databases:
+  # Nota: Render elimino el plan gratuito de PostgreSQL.
+  # Usa 'starter' ($7/mes aprox.) o el plan que tengas disponible.
+  # Si prefieres Supabase, deja esta seccion comentada y configura
+  # DATABASE_URL manualmente en el Web Service.
+  - name: bd-core-mobile
+    databaseName: bd_core_mobile
+    user: bd_core_mobile
+    plan: starter

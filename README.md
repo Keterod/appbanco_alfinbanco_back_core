@@ -69,6 +69,56 @@ sql/           01_schema_bd_core_mobile.sql
 scripts/       seed_bd_core_mobile.py
 ```
 
+## Deploy en Render
+
+El repositorio incluye `render.yaml` (Blueprint) y `Dockerfile` para desplegar
+el API como Web Service con Docker.
+
+### Opcion A — Blueprint (recomendada)
+
+1. Sube los cambios a GitHub/GitLab.
+2. En Render: **Blueprints → New Blueprint Instance**.
+3. Selecciona el repositorio y la rama.
+4. Render creara automaticamente:
+   - Web Service `core-mobile-banco` (Docker).
+   - Base de datos PostgreSQL `bd-core-mobile`.
+5. Una vez desplegado, Render inyecta `DATABASE_URL` automaticamente.
+6. (Opcional) Si usas Supabase en lugar de la BD de Render, sobrescribe
+   `DATABASE_URL` en **Environment** del servicio.
+
+### Opcion B — Web Service manual
+
+1. Crea un nuevo **Web Service** y selecciona **Docker** como runtime.
+2. Variables de entorno minimas:
+   - `DATABASE_URL` (de Render Postgres o Supabase)
+   - `DB_USE_SSL=require`
+   - `SECRET_KEY` (genera una clave larga y aleatoria)
+   - `PORT` (Render la sobreescribe automaticamente)
+3. Start command (ya esta en el Dockerfile):
+   ```bash
+   uvicorn main:app --host 0.0.0.0 --port ${PORT:-8003}
+   ```
+
+### Verificacion rapida
+
+```bash
+curl https://<tu-servicio>.onrender.com/
+```
+
+Debe responder:
+
+```json
+{"sistema": "Core Mobile Banco Andino", "version": "1.0.0", "status": "ok"}
+```
+
+### Notas importantes
+
+- **Nunca subas el archivo `.env` real al repositorio.** Esta en `.gitignore`.
+- `SECRET_KEY` debe ser distinta en cada ambiente (produccion, staging, dev).
+- Si la BD es local sin SSL, usa `DB_USE_SSL=disable` (o vacio).
+- El `CORE_DATABASE_URL` solo se necesita si se usa el puente
+  `sync_outbox -> bd_core_financiero`.
+
 ## Pendiente (siguientes etapas)
 - Modulos M2–M11 (solicitudes, documentos, buro, cobranza, reportes).
 - Tablas espejo `cr_*` (sync core -> mobile) y servicio de promocion `sync_outbox` -> core.
