@@ -154,7 +154,12 @@ def listar_notas(db: Session, solicitud_id: str) -> list[dict]:
     ]
 
 
-def listar(db: Session, asesor_id: str) -> list[dict]:
+def listar(
+    db: Session,
+    asesor_id: str,
+    fecha_inicio: str | None = None,
+    fecha_fin: str | None = None,
+) -> list[dict]:
     sql = """
         SELECT s.id, s.numero_expediente, s.cliente_id, s.created_by_auth_id,
                s.asesor_id, s.monto_solicitado, s.monto_aprobado,
@@ -165,10 +170,13 @@ def listar(db: Session, asesor_id: str) -> list[dict]:
         FROM solicitudes_credito s
         JOIN clientes c ON c.id = s.cliente_id
         WHERE (s.asesor_id = :asesor OR s.asesor_id IS NULL)
-          AND date_trunc('month', s.created_at) = date_trunc('month', now())
-        ORDER BY s.created_at DESC
         """
     params = {"asesor": asesor_id}
+    if fecha_inicio and fecha_fin:
+        sql += " AND s.created_at::date BETWEEN :fecha_inicio AND :fecha_fin"
+        params["fecha_inicio"] = fecha_inicio
+        params["fecha_fin"] = fecha_fin
+    sql += " ORDER BY s.created_at DESC"
     try:
         compiled = text(sql).bindparams(**params).compile(
             dialect=postgresql.dialect(),

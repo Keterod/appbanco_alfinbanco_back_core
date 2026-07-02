@@ -1,4 +1,5 @@
-from fastapi import APIRouter, Depends, HTTPException, Request
+from datetime import datetime
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel
 from sqlalchemy import text
 from sqlalchemy.orm import Session
@@ -35,13 +36,31 @@ def crear_solicitud(
     )
 
 
+def _validar_fecha(nombre: str, valor: str | None) -> str | None:
+    if valor is None:
+        return None
+    try:
+        datetime.strptime(valor, "%Y-%m-%d")
+    except ValueError:
+        raise HTTPException(
+            status_code=422,
+            detail=f"{nombre} debe tener formato YYYY-MM-DD",
+        )
+    return valor
+
+
 @router.get("")
 def listar_solicitudes(
     request: Request,
+    fecha_inicio: str | None = Query(None, description="Fecha inicio en formato YYYY-MM-DD"),
+    fecha_fin: str | None = Query(None, description="Fecha fin en formato YYYY-MM-DD"),
     db: Session = Depends(get_db),
     asesor: dict = Depends(get_current_asesor),
 ):
     """Historial de solicitudes del mes (HU-20) y tablero de estado (M9)."""
+    fecha_inicio = _validar_fecha("fecha_inicio", fecha_inicio)
+    fecha_fin = _validar_fecha("fecha_fin", fecha_fin)
+
     # --- DEBUG temporal: contexto de la peticion ---
     print(f"[DEBUG GET /solicitudes] URL: {request.url}")
     print(f"[DEBUG GET /solicitudes] Origen (client): {request.client}")
@@ -83,7 +102,12 @@ def listar_solicitudes(
 
     print(f"[DEBUG GET /solicitudes] asesor_id del JWT: {asesor.get('asesor_id')}")
     print(f"[DEBUG GET /solicitudes] perfil del JWT: {asesor.get('perfil')}")
-    return rep_solicitudes.listar(db, asesor["asesor_id"])
+    return rep_solicitudes.listar(
+        db,
+        asesor["asesor_id"],
+        fecha_inicio=fecha_inicio,
+        fecha_fin=fecha_fin,
+    )
 
 
 @router.get("/{solicitud_id}")
