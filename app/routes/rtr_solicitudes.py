@@ -1,5 +1,6 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 from app.core.cfg_database import get_db
 from app.core.cfg_auth import get_current_asesor
@@ -36,10 +37,52 @@ def crear_solicitud(
 
 @router.get("")
 def listar_solicitudes(
+    request: Request,
     db: Session = Depends(get_db),
     asesor: dict = Depends(get_current_asesor),
 ):
     """Historial de solicitudes del mes (HU-20) y tablero de estado (M9)."""
+    # --- DEBUG temporal: contexto de la peticion ---
+    print(f"[DEBUG GET /solicitudes] URL: {request.url}")
+    print(f"[DEBUG GET /solicitudes] Origen (client): {request.client}")
+
+    masked_headers = {}
+    for key, value in request.headers.items():
+        if isinstance(value, str) and value.count(".") == 2 and len(value) > 12:
+            # Valor suelto con forma de JWT
+            masked_headers[key] = f"{value[:4]}...{value[-4:]}"
+        elif (
+            isinstance(value, str)
+            and key.lower() == "authorization"
+            and len(value) > 12
+        ):
+            parts = value.split(" ", 1)
+            if len(parts) == 2 and parts[1].count(".") == 2:
+                token = parts[1]
+                masked_headers[key] = f"{parts[0]} {token[:4]}...{token[-4:]}"
+            else:
+                masked_headers[key] = f"{value[:4]}...{value[-4:]}"
+        else:
+            masked_headers[key] = value
+    print(f"[DEBUG GET /solicitudes] Headers: {masked_headers}")
+
+    # --- DEBUG temporal: contexto de la base de datos ---
+    sa_url = db.bind.url
+    db_url_str = str(sa_url)
+    if sa_url.username:
+        db_url_str = db_url_str.replace(sa_url.username, "****")
+    if sa_url.password:
+        db_url_str = db_url_str.replace(sa_url.password, "****")
+    print(f"[DEBUG GET /solicitudes] DATABASE_URL: {db_url_str}")
+
+    row_db_schema = db.execute(text("SELECT current_database(), current_schema();")).fetchone()
+    print(f"[DEBUG GET /solicitudes] current_database/current_schema: {tuple(row_db_schema)}")
+
+    row_count = db.execute(text("SELECT COUNT(*) FROM solicitudes_credito;")).fetchone()
+    print(f"[DEBUG GET /solicitudes] COUNT(solicitudes_credito): {row_count[0]}")
+
+    print(f"[DEBUG GET /solicitudes] asesor_id del JWT: {asesor.get('asesor_id')}")
+    print(f"[DEBUG GET /solicitudes] perfil del JWT: {asesor.get('perfil')}")
     return rep_solicitudes.listar(db, asesor["asesor_id"])
 
 

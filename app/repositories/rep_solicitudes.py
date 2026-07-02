@@ -2,6 +2,7 @@ import json
 import uuid
 from datetime import datetime, timezone
 from sqlalchemy import text
+from sqlalchemy.dialects import postgresql
 from sqlalchemy.orm import Session
 
 
@@ -154,24 +155,32 @@ def listar_notas(db: Session, solicitud_id: str) -> list[dict]:
 
 
 def listar(db: Session, asesor_id: str) -> list[dict]:
-    rows = db.execute(
-        text(
-            """
-            SELECT s.id, s.numero_expediente, s.cliente_id, s.created_by_auth_id,
-                   s.asesor_id, s.monto_solicitado, s.monto_aprobado,
-                   s.estado, s.created_at, s.updated_at,
-                   s.score_pre_evaluacion, s.elegibilidad, s.riesgo_asignado,
-                   s.ratio_capacidad_pago, s.motivo_pre_evaluacion,
-                   c.numero_documento, c.nombres, c.apellidos, c.telefono
-            FROM solicitudes_credito s
-            JOIN clientes c ON c.id = s.cliente_id
-            WHERE s.asesor_id = :asesor
-              AND date_trunc('month', s.created_at) = date_trunc('month', now())
-            ORDER BY s.created_at DESC
-            """
-        ),
-        {"asesor": asesor_id},
-    ).mappings().all()
+    sql = """
+        SELECT s.id, s.numero_expediente, s.cliente_id, s.created_by_auth_id,
+               s.asesor_id, s.monto_solicitado, s.monto_aprobado,
+               s.estado, s.created_at, s.updated_at,
+               s.score_pre_evaluacion, s.elegibilidad, s.riesgo_asignado,
+               s.ratio_capacidad_pago, s.motivo_pre_evaluacion,
+               c.numero_documento, c.nombres, c.apellidos, c.telefono
+        FROM solicitudes_credito s
+        JOIN clientes c ON c.id = s.cliente_id
+        WHERE (s.asesor_id = :asesor OR s.asesor_id IS NULL)
+          AND date_trunc('month', s.created_at) = date_trunc('month', now())
+        ORDER BY s.created_at DESC
+        """
+    params = {"asesor": asesor_id}
+    try:
+        compiled = text(sql).bindparams(**params).compile(
+            dialect=postgresql.dialect(),
+            compile_kwargs={"literal_binds": True},
+        )
+        print(f"[DEBUG rep_solicitudes.listar] SQL final: {compiled}")
+    except Exception as exc:
+        print(f"[DEBUG rep_solicitudes.listar] SQL (plantilla): {sql.strip()}")
+        print(f"[DEBUG rep_solicitudes.listar] no se pudo renderizar SQL final: {exc}")
+    print(f"[DEBUG rep_solicitudes.listar] parámetros enviados: {params}")
+    rows = db.execute(text(sql), params).mappings().all()
+    print(f"[DEBUG rep_solicitudes.listar] filas devueltas: {len(rows)}")
     return [
         {
             "id": str(r["id"]),
