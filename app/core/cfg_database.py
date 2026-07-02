@@ -7,6 +7,7 @@ engine = create_engine(
     pool_pre_ping=True,
     pool_size=5,
     max_overflow=10,
+    connect_args={"sslmode": "require"},
 )
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
@@ -28,6 +29,7 @@ core_engine = create_engine(
     pool_pre_ping=True,
     pool_size=2,
     max_overflow=4,
+    connect_args={"sslmode": "require"},
 )
 
 SessionLocalCore = sessionmaker(autocommit=False, autoflush=False, bind=core_engine)
