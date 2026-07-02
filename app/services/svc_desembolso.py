@@ -44,7 +44,7 @@ def desembolsar(db: Session, solicitud_id: str, asesor_id: str) -> dict:
             SELECT s.id, s.numero_expediente, s.cliente_id, s.created_by_auth_id,
                    s.asesor_id, s.estado, s.monto_solicitado, s.monto_aprobado,
                    s.plazo_meses, s.tea_referencial, s.moneda, s.destino_credito,
-                   s.tipo_negocio, s.nombre_negocio, s.producto_credito,
+                   s.tipo_negocio, s.nombre_negocio,
                    c.numero_documento, c.nombres, c.apellidos
             FROM solicitudes_credito s
             JOIN clientes c ON c.id = s.cliente_id
@@ -65,7 +65,6 @@ def desembolsar(db: Session, solicitud_id: str, asesor_id: str) -> dict:
     plazo_meses = row["plazo_meses"]
     tea = float(row["tea_referencial"]) if row["tea_referencial"] else 0
     moneda = row["moneda"] or "PEN"
-    producto = row.get("producto_credito") or "Credito Empresarial Alfin"
     numero_expediente = row["numero_expediente"]
 
     if asesor_actual is not None and asesor_actual != asesor_id:
@@ -100,13 +99,13 @@ def desembolsar(db: Session, solicitud_id: str, asesor_id: str) -> dict:
                  monto_original, monto_pendiente, cuota_mensual,
                  proxima_fecha_pago, fecha_proximo_pago,
                  tea_referencial, tea, progreso_pago,
-                 estado, activo, fecha_desembolso)
+                 estado, activo)
             VALUES
                 (:id, :cli, :prod, :nom_prod,
                  :monto, :monto, :cuota,
                  :prox_pago, :prox_pago,
                  :tea, :tea, 0,
-                 'activo', TRUE, :fecha)
+                 'activo', TRUE)
             """
         ),
         {
@@ -118,7 +117,6 @@ def desembolsar(db: Session, solicitud_id: str, asesor_id: str) -> dict:
             "cuota": round(cuota, 2),
             "prox_pago": proxima_fecha,
             "tea": tea,
-            "fecha": hoy,
         },
     )
 

@@ -1,3 +1,4 @@
+import traceback
 from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel
@@ -204,7 +205,17 @@ def desembolsar_solicitud(
     asesor: dict = Depends(get_current_asesor),
 ):
     """Desembolsa la solicitud: crea credito, cronograma, movimiento, operacion y actualiza saldo."""
-    result = svc_desembolso.desembolsar(db, solicitud_id, asesor["asesor_id"])
+    print(f"[DEBUG DESEMBOLSO] solicitud_id recibido: {solicitud_id}")
+    print(f"[DEBUG DESEMBOLSO] asesor_id del JWT: {asesor.get('asesor_id')}")
+    print(f"[DEBUG DESEMBOLSO] body/payload recibido: (endpoint no espera body)")
+
+    try:
+        result = svc_desembolso.desembolsar(db, solicitud_id, asesor["asesor_id"])
+    except Exception as e:
+        print(f"[DEBUG DESEMBOLSO ERROR] {str(e)}")
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Error interno al desembolsar: {str(e)}")
+
     if result.get("error") == "not_found":
         raise HTTPException(status_code=404, detail="Solicitud no encontrada")
     if result.get("error") == "conflict":
