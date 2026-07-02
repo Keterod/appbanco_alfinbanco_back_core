@@ -36,29 +36,27 @@ def obtener_ficha(db: Session, cliente_id: str) -> dict | None:
     if cli is None:
         return None
 
-    # Posicion en el sistema (agregado de cr_creditos) — RF-30
     pos = db.execute(
         text(
             """
             SELECT
-                COALESCE(SUM(saldo_total), 0)                  AS deuda_total,
-                COUNT(*) FILTER (WHERE estado = 'vigente')     AS cuentas_vigentes,
-                COUNT(*) FILTER (WHERE dias_mora > 0)          AS cuentas_mora,
-                COALESCE(MAX(dias_mora), 0)                    AS dias_mayor_mora
-            FROM cr_creditos
+                COALESCE(SUM(monto_pendiente), 0)             AS deuda_total,
+                COUNT(*) FILTER (WHERE estado = 'activo')     AS cuentas_vigentes,
+                0::int                                        AS cuentas_mora,
+                0::int                                        AS dias_mayor_mora
+            FROM clientes_creditos
             WHERE cliente_id = :id
             """
         ),
         {"id": cliente_id},
     ).mappings().first()
 
-    # Historial crediticio (ultimos 5) — RF-27
     historial = db.execute(
         text(
             """
-            SELECT cod_cuenta_credito, producto, monto_desembolsado,
-                   tea, estado, dias_mora, cuotas_total, cuotas_pagadas
-            FROM cr_creditos
+            SELECT id, producto, monto_original,
+                   tea, estado, progreso_pago
+            FROM clientes_creditos
             WHERE cliente_id = :id
             ORDER BY fecha_desembolso DESC NULLS LAST
             LIMIT 5
@@ -99,7 +97,7 @@ def obtener_ficha(db: Session, cliente_id: str) -> dict | None:
     puntuales = [m for m in con_cuota if m == 1]
     pct_puntual = round(len(puntuales) / len(con_cuota) * 100, 1) if con_cuota else 0
     monto_pagado = sum(
-        float(h["monto_desembolsado"] or 0)
+        float(h["monto_original"] or 0)
         for h in historial
         if h["estado"] == "pagado"
     )
@@ -132,13 +130,13 @@ def obtener_ficha(db: Session, cliente_id: str) -> dict | None:
         "historial": [
             {
                 "producto": h["producto"],
-                "monto_desembolsado": float(h["monto_desembolsado"] or 0),
-                "plazo_meses": h["cuotas_total"],
+                "monto_desembolsado": float(h["monto_original"] or 0),
+                "plazo_meses": h["progreso_pago"] or 0,
                 "tea": float(h["tea"] or 0),
                 "estado": h["estado"],
-                "dias_mora": h["dias_mora"] or 0,
-                "cuotas_total": h["cuotas_total"] or 0,
-                "cuotas_pagadas": h["cuotas_pagadas"] or 0,
+                "dias_mora": 0,
+                "cuotas_total": 0,
+                "cuotas_pagadas": h["progreso_pago"] or 0,
             }
             for h in historial
         ],

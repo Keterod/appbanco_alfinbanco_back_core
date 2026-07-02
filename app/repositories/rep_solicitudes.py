@@ -5,8 +5,36 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 
+def normalizar_estado(valor):
+    if not valor:
+        return "enviada"
+    v = str(valor).strip()
+    mapa = {
+        "enviado": "enviada",
+        "en_evaluacion": "enviada",
+        "aprobado": "aprobada",
+        "condicionado": "condicionada",
+        "rechazado": "rechazada",
+        "desembolsado": "desembolsada",
+    }
+    return mapa.get(v, v)
+
+
+def normalizar_elegibilidad(valor):
+    if not valor:
+        return None
+    v = str(valor).strip().upper()
+    mapa = {
+        "OBSERVADO": "CONDICIONADO",
+        "REVISAR": "CONDICIONADO",
+        "NO_PROCEDE": "NO APTO",
+        "NO PROCEDE": "NO APTO",
+        "NO_APTO": "NO APTO",
+    }
+    return mapa.get(v, v)
+
+
 def _upsert_cliente(db: Session, d: dict) -> str:
-    """Devuelve el cliente_id; lo crea si no existe (por numero_documento)."""
     row = db.execute(
         text("SELECT id FROM clientes WHERE numero_documento = :doc"),
         {"doc": d["numero_documento"]},
@@ -34,7 +62,6 @@ def _upsert_cliente(db: Session, d: dict) -> str:
 
 
 def crear(db: Session, asesor_id: str, agencia_id: str | None, d: dict) -> dict:
-    """Crea una solicitud de credito (M5 / HU-17)."""
     cliente_id = _upsert_cliente(db, d)
     sol_id = str(uuid.uuid4())
     expediente = "EXP-" + sol_id.replace("-", "")[:8].upper()
@@ -70,8 +97,6 @@ def crear(db: Session, asesor_id: str, agencia_id: str | None, d: dict) -> dict:
             "firma": d.get("firma_cliente_base64"),
         },
     )
-
-    # Encola para promover al nucleo bancario (puente sync_outbox -> core).
     payload = {
         "numero_documento": d["numero_documento"],
         "nombres": d.get("nombres", ""),
@@ -96,7 +121,6 @@ def crear(db: Session, asesor_id: str, agencia_id: str | None, d: dict) -> dict:
 
 
 def agregar_nota(db: Session, solicitud_id: str, asesor_id: str, contenido: str) -> dict:
-    """Agrega una nota interna a una solicitud (RF-72)."""
     nid = str(uuid.uuid4())
     db.execute(
         text(
@@ -111,7 +135,6 @@ def agregar_nota(db: Session, solicitud_id: str, asesor_id: str, contenido: str)
 
 
 def listar_notas(db: Session, solicitud_id: str) -> list[dict]:
-    """Notas internas de una solicitud, recientes primero (RF-72)."""
     rows = db.execute(
         text(
             """SELECT contenido, created_at
@@ -131,12 +154,15 @@ def listar_notas(db: Session, solicitud_id: str) -> list[dict]:
 
 
 def listar(db: Session, asesor_id: str) -> list[dict]:
-    """Solicitudes del asesor en el mes actual (HU-20), recientes primero."""
     rows = db.execute(
         text(
             """
-            SELECT s.id, s.numero_expediente, s.monto_solicitado, s.monto_aprobado,
-                   s.estado, s.created_at, c.nombres, c.apellidos
+            SELECT s.id, s.numero_expediente, s.cliente_id, s.created_by_auth_id,
+                   s.asesor_id, s.monto_solicitado, s.monto_aprobado,
+                   s.estado, s.created_at, s.updated_at,
+                   s.score_pre_evaluacion, s.elegibilidad, s.riesgo_asignado,
+                   s.ratio_capacidad_pago, s.motivo_pre_evaluacion,
+                   c.numero_documento, c.nombres, c.apellidos, c.telefono
             FROM solicitudes_credito s
             JOIN clientes c ON c.id = s.cliente_id
             WHERE s.asesor_id = :asesor
@@ -150,47 +176,44 @@ def listar(db: Session, asesor_id: str) -> list[dict]:
         {
             "id": str(r["id"]),
             "numero_expediente": r["numero_expediente"],
+            "cliente_id": str(r["cliente_id"]),
+            "created_by_auth_id": str(r["created_by_auth_id"]) if r.get("created_by_auth_id") else None,
+            "asesor_id": str(r["asesor_id"]) if r["asesor_id"] else None,
             "cliente_nombre": f"{r['nombres']} {r['apellidos']}",
+            "solicitante_nombre": f"{r['nombres']} {r['apellidos']}",
+            "solicitante_documento": r["numero_documento"],
+            "solicitante_telefono": r["telefono"],
             "monto_solicitado": float(r["monto_solicitado"] or 0),
             "monto_aprobado": float(r["monto_aprobado"] or 0),
-            "estado": r["estado"],
+            "score_pre_evaluacion": r["score_pre_evaluacion"],
+            "elegibilidad": normalizar_elegibilidad(r["elegibilidad"]),
+            "riesgo_asignado": r["riesgo_asignado"],
+            "ratio_capacidad_pago": float(r["ratio_capacidad_pago"]) if r["ratio_capacidad_pago"] else None,
+            "motivo_pre_evaluacion": r["motivo_pre_evaluacion"],
+            "estado": normalizar_estado(r["estado"]),
             "created_at": r["created_at"].isoformat() if r["created_at"] else None,
+            "updated_at": r["updated_at"].isoformat() if r["updated_at"] else None,
         }
         for r in rows
     ]
 
 
-def _asegurar_columnas(db: Session) -> None:
-    """Agrega columnas faltantes a solicitudes_credito si no existen (idempotente)."""
-    columnas = [
-        "score_pre_evaluacion INTEGER",
-        "elegibilidad VARCHAR(20)",
-        "ratio_capacidad_pago NUMERIC(5,2)",
-        "riesgo_asignado VARCHAR(20)",
-        "motivo_pre_evaluacion TEXT",
-        "condicion_adicional TEXT",
-        "motivo_rechazo TEXT",
-        "fecha_decision TIMESTAMP WITH TIME ZONE",
-        "fecha_desembolso TIMESTAMP WITH TIME ZONE",
-        "updated_at TIMESTAMP WITH TIME ZONE",
-    ]
-    for col in columnas:
-        db.execute(text(f"ALTER TABLE solicitudes_credito ADD COLUMN IF NOT EXISTS {col}"))
-    db.commit()
-
-
 def obtener(db: Session, solicitud_id: str) -> dict | None:
-    """Retorna detalle completo de una solicitud."""
-    _asegurar_columnas(db)
     row = db.execute(
         text(
             """
             SELECT s.id, s.numero_expediente, s.asesor_id, s.cliente_id,
+                   s.created_by_auth_id,
                    s.monto_solicitado, s.monto_aprobado, s.plazo_meses,
                    s.cuota_estimada, s.tea_referencial, s.ingresos_estimados,
+                   s.gastos_mensuales,
                    s.score_pre_evaluacion, s.elegibilidad, s.ratio_capacidad_pago,
                    s.riesgo_asignado, s.motivo_pre_evaluacion,
+                   s.destino_credito, s.garantia,
                    s.condicion_adicional, s.motivo_rechazo,
+                   s.estado_buro, s.deuda_total, s.dias_mayor_mora,
+                   s.en_lista_inhabilitados,
+                   s.observacion_evaluador,
                    s.estado, s.created_at, s.updated_at, s.fecha_decision, s.fecha_desembolso,
                    c.numero_documento, c.nombres, c.apellidos, c.telefono
             FROM solicitudes_credito s
@@ -207,6 +230,7 @@ def obtener(db: Session, solicitud_id: str) -> dict | None:
         "numero_expediente": row["numero_expediente"],
         "asesor_id": str(row["asesor_id"]) if row["asesor_id"] else None,
         "cliente_id": str(row["cliente_id"]),
+        "created_by_auth_id": str(row["created_by_auth_id"]) if row.get("created_by_auth_id") else None,
         "solicitante_documento": row["numero_documento"],
         "solicitante_nombre": f"{row['nombres']} {row['apellidos']}",
         "solicitante_telefono": row["telefono"],
@@ -216,14 +240,22 @@ def obtener(db: Session, solicitud_id: str) -> dict | None:
         "cuota_estimada": float(row["cuota_estimada"]) if row["cuota_estimada"] else None,
         "tea_referencial": float(row["tea_referencial"]) if row["tea_referencial"] else None,
         "ingresos_estimados": float(row["ingresos_estimados"]) if row["ingresos_estimados"] else None,
+        "gastos_mensuales": float(row["gastos_mensuales"]) if row.get("gastos_mensuales") else None,
         "score_pre_evaluacion": row["score_pre_evaluacion"],
-        "elegibilidad": row["elegibilidad"],
+        "elegibilidad": normalizar_elegibilidad(row["elegibilidad"]),
         "ratio_capacidad_pago": float(row["ratio_capacidad_pago"]) if row["ratio_capacidad_pago"] else None,
         "riesgo_asignado": row["riesgo_asignado"],
         "motivo_pre_evaluacion": row["motivo_pre_evaluacion"],
+        "destino_credito": row["destino_credito"],
+        "garantia": row["garantia"],
         "condicion_adicional": row["condicion_adicional"],
         "motivo_rechazo": row["motivo_rechazo"],
-        "estado": row["estado"],
+        "estado_buro": row["estado_buro"],
+        "deuda_total": float(row["deuda_total"]) if row.get("deuda_total") else None,
+        "dias_mayor_mora": row["dias_mayor_mora"],
+        "en_lista_inhabilitados": row["en_lista_inhabilitados"],
+        "observacion_evaluador": row["observacion_evaluador"],
+        "estado": normalizar_estado(row["estado"]),
         "created_at": row["created_at"].isoformat() if row["created_at"] else None,
         "updated_at": row["updated_at"].isoformat() if row["updated_at"] else None,
         "fecha_decision": row["fecha_decision"].isoformat() if row["fecha_decision"] else None,
@@ -232,8 +264,6 @@ def obtener(db: Session, solicitud_id: str) -> dict | None:
 
 
 def reclamar(db: Session, solicitud_id: str, asesor_id: str) -> dict | None:
-    """Asigna asesor a la solicitud si aun no tiene uno. Retorna solicitud actualizada o None si no existe."""
-    _asegurar_columnas(db)
     now = datetime.now(timezone.utc)
     result = db.execute(
         text(
@@ -251,11 +281,14 @@ def reclamar(db: Session, solicitud_id: str, asesor_id: str) -> dict | None:
     if not result:
         return None
     db.commit()
-    return {"id": str(result["id"]), "asesor_id": str(result["asesor_id"]), "estado": result["estado"]}
+    return {
+        "id": str(result["id"]),
+        "asesor_id": str(result["asesor_id"]),
+        "estado": normalizar_estado(result["estado"]),
+    }
 
 
 def verificar_asesor(db: Session, solicitud_id: str, asesor_id: str) -> tuple[str, str | None]:
-    """Verifica disponibilidad de la solicitud. Retorna (estado_solicitud, asesor_actual_id o None)."""
     row = db.execute(
         text("SELECT estado, asesor_id FROM solicitudes_credito WHERE id = :sid"),
         {"sid": solicitud_id},
@@ -268,8 +301,6 @@ def verificar_asesor(db: Session, solicitud_id: str, asesor_id: str) -> tuple[st
 
 
 def aprobar(db: Session, solicitud_id: str, asesor_id: str) -> dict | None:
-    """Aprueba la solicitud. Asigna asesor si es null, cambia estado a aprobada."""
-    _asegurar_columnas(db)
     estado, asesor_actual = verificar_asesor(db, solicitud_id, asesor_id)
     if estado == "not_found":
         return {"error": "not_found"}
@@ -294,15 +325,13 @@ def aprobar(db: Session, solicitud_id: str, asesor_id: str) -> dict | None:
     db.commit()
     return {
         "id": str(result["id"]),
-        "estado": result["estado"],
+        "estado": normalizar_estado(result["estado"]),
         "monto_aprobado": float(result["monto_aprobado"] or 0),
         "fecha_decision": result["fecha_decision"].isoformat() if result["fecha_decision"] else None,
     }
 
 
 def condicionar(db: Session, solicitud_id: str, asesor_id: str, monto_aprobado: float, condicion: str) -> dict | None:
-    """Condiciona la solicitud con monto aprobado menor."""
-    _asegurar_columnas(db)
     estado, asesor_actual = verificar_asesor(db, solicitud_id, asesor_id)
     if estado == "not_found":
         return {"error": "not_found"}
@@ -368,7 +397,7 @@ def condicionar(db: Session, solicitud_id: str, asesor_id: str, monto_aprobado: 
     db.commit()
     return {
         "id": str(result["id"]),
-        "estado": result["estado"],
+        "estado": normalizar_estado(result["estado"]),
         "monto_aprobado": float(result["monto_aprobado"] or 0),
         "cuota_estimada": float(result["cuota_estimada"] or 0),
         "ratio_capacidad_pago": float(result["ratio_capacidad_pago"] or 0) if result["ratio_capacidad_pago"] else None,
@@ -377,8 +406,6 @@ def condicionar(db: Session, solicitud_id: str, asesor_id: str, monto_aprobado: 
 
 
 def rechazar(db: Session, solicitud_id: str, asesor_id: str, motivo: str) -> dict | None:
-    """Rechaza la solicitud con motivo."""
-    _asegurar_columnas(db)
     estado, asesor_actual = verificar_asesor(db, solicitud_id, asesor_id)
     if estado == "not_found":
         return {"error": "not_found"}
@@ -403,7 +430,7 @@ def rechazar(db: Session, solicitud_id: str, asesor_id: str, motivo: str) -> dic
     db.commit()
     return {
         "id": str(result["id"]),
-        "estado": result["estado"],
+        "estado": normalizar_estado(result["estado"]),
         "motivo_rechazo": result["motivo_rechazo"],
         "fecha_decision": result["fecha_decision"].isoformat() if result["fecha_decision"] else None,
     }

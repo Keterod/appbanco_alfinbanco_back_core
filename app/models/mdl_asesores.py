@@ -15,7 +15,7 @@ class Agencia(Base):
     created_at  = Column(DateTime(timezone=True), server_default=func.now())
 
 class Asesor(Base):
-    __tablename__ = "asesores"
+    __tablename__ = "asesores_negocio"
 
     id                = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     cod_asesor        = Column(String(20), unique=True)
@@ -24,7 +24,7 @@ class Asesor(Base):
     apellidos         = Column(String(100), nullable=False)
     agencia_id        = Column(UUID(as_uuid=True), ForeignKey("agencias.id"))
     perfil            = Column(String(20), nullable=False, default="operador")
-    password_hash     = Column(String, nullable=False)
+    password_hash     = Column(String, nullable=True)
     token_fcm         = Column(String)
     intentos_fallidos = Column(Integer, default=0)
     bloqueado_hasta   = Column(DateTime(timezone=True))

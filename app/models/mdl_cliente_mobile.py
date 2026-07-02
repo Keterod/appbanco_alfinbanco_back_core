@@ -1,10 +1,3 @@
-"""
-Modelos SQLAlchemy del lado **app de clientes** (appbanco / Flutter clientes).
-
-Mapean las tablas ya existentes en bd_core_mobile:
-usuarios_cliente, cr_cuentas_ahorro, cr_creditos, cr_cronograma_pagos,
-cr_movimientos, tarjetas, operaciones_cliente, notificaciones.
-"""
 import uuid
 from sqlalchemy import (
     Column, String, Boolean, Integer, Numeric, Date, DateTime, Text, ForeignKey,
@@ -19,7 +12,7 @@ class UsuarioCliente(Base):
 
     id                = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     cliente_id        = Column(UUID(as_uuid=True), ForeignKey("clientes.id"), nullable=False, unique=True)
-    username          = Column(String(50), unique=True, nullable=False)  # = numero_documento (DNI)
+    username          = Column(String(50), unique=True, nullable=False)
     password_hash     = Column(Text, nullable=False)
     token_fcm         = Column(Text)
     activo            = Column(Boolean, nullable=False, default=True)
@@ -29,71 +22,69 @@ class UsuarioCliente(Base):
     created_at        = Column(DateTime(timezone=True), server_default=func.now())
 
 
-class CrCuentaAhorro(Base):
-    __tablename__ = "cr_cuentas_ahorro"
+class ClientesCuenta(Base):
+    __tablename__ = "clientes_cuentas"
 
     id                = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    cod_cuenta_ahorro = Column(String(30), unique=True, nullable=False)
-    cliente_id        = Column(UUID(as_uuid=True), ForeignKey("clientes.id"), nullable=False)
+    cliente_id        = Column(UUID(as_uuid=True), nullable=False)
     tipo_cuenta       = Column(String(40))
     moneda            = Column(String(3), default="PEN")
-    saldo_capital     = Column(Numeric(12, 2))
-    saldo_interes     = Column(Numeric(12, 2))
-    tea               = Column(Numeric(5, 2))
-    estado            = Column(String(20))
-    sync_at           = Column(DateTime(timezone=True), server_default=func.now())
+    saldo             = Column(Numeric(12, 2), default=0)
+    saldo_disponible  = Column(Numeric(12, 2), default=0)
+    saldo_contable    = Column(Numeric(12, 2), default=0)
+    es_principal      = Column(Boolean, default=False)
+    estado            = Column(String(20), default="activa")
+    created_at        = Column(DateTime(timezone=True), server_default=func.now())
 
 
-class CrCredito(Base):
-    __tablename__ = "cr_creditos"
-
-    id                   = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    cod_cuenta_credito   = Column(String(30), unique=True, nullable=False)
-    cliente_id           = Column(UUID(as_uuid=True), ForeignKey("clientes.id"), nullable=False)
-    producto             = Column(String(40))
-    monto_desembolsado   = Column(Numeric(12, 2))
-    saldo_capital        = Column(Numeric(12, 2))
-    saldo_total          = Column(Numeric(12, 2))
-    dias_mora            = Column(Integer, nullable=False, default=0)
-    calificacion_interna = Column(String(20))
-    estado               = Column(String(20))
-    fecha_desembolso     = Column(Date)
-    tea                  = Column(Numeric(5, 2))
-    cuotas_total         = Column(Integer)
-    cuotas_pagadas       = Column(Integer)
-    sync_at              = Column(DateTime(timezone=True), server_default=func.now())
-
-
-class CrCronogramaPago(Base):
-    __tablename__ = "cr_cronograma_pagos"
+class ClientesCredito(Base):
+    __tablename__ = "clientes_creditos"
 
     id                 = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    cod_cuenta_credito = Column(String(30), ForeignKey("cr_creditos.cod_cuenta_credito"), nullable=False)
-    nro_cuota          = Column(Integer, nullable=False)
-    fecha_vencimiento  = Column(Date, nullable=False)
-    monto_cuota        = Column(Numeric(10, 2))
-    monto_capital      = Column(Numeric(10, 2))
-    monto_interes      = Column(Numeric(10, 2))
-    saldo              = Column(Numeric(12, 2))
-    estado_cuota       = Column(String(20))
-    fecha_pago         = Column(Date)
-    sync_at            = Column(DateTime(timezone=True), server_default=func.now())
+    cliente_id         = Column(UUID(as_uuid=True), nullable=False)
+    producto           = Column(String(40))
+    nombre_producto    = Column(String(100))
+    monto_original     = Column(Numeric(12, 2))
+    monto_pendiente    = Column(Numeric(12, 2))
+    cuota_mensual      = Column(Numeric(10, 2))
+    proxima_fecha_pago = Column(Date)
+    fecha_proximo_pago = Column(Date)
+    tea_referencial    = Column(Numeric(5, 2))
+    tea                = Column(Numeric(5, 2))
+    progreso_pago      = Column(Integer, default=0)
+    estado             = Column(String(20), default="activo")
+    activo             = Column(Boolean, default=True)
+    fecha_desembolso   = Column(Date)
+    created_at         = Column(DateTime(timezone=True), server_default=func.now())
 
 
-class CrMovimiento(Base):
-    __tablename__ = "cr_movimientos"
+class ClientesCronogramaPago(Base):
+    __tablename__ = "clientes_cronograma_pagos"
+
+    id                = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    cliente_id        = Column(UUID(as_uuid=True), nullable=False)
+    credito_id        = Column(UUID(as_uuid=True), ForeignKey("clientes_creditos.id"), nullable=False)
+    numero_cuota      = Column(Integer, nullable=False)
+    fecha_vencimiento = Column(Date, nullable=False)
+    monto             = Column(Numeric(10, 2))
+    estado            = Column(String(20), default="pendiente")
+    fecha_pago        = Column(Date)
+    created_at        = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class ClientesMovimiento(Base):
+    __tablename__ = "clientes_movimientos"
 
     id              = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    cod_operacion   = Column(String(40), unique=True, nullable=False)
-    cliente_id      = Column(UUID(as_uuid=True), ForeignKey("clientes.id"), nullable=False)
-    cod_cuenta      = Column(String(30))
-    tipo            = Column(String(10))   # DEB / CRE / TRF
-    concepto        = Column(String(60))
-    canal           = Column(String(20))   # APP / WEB / CAJA
+    cliente_id      = Column(UUID(as_uuid=True), nullable=False)
+    cuenta_id       = Column(UUID(as_uuid=True), ForeignKey("clientes_cuentas.id"))
+    descripcion     = Column(String(200))
+    categoria       = Column(String(40))
+    referencia      = Column(String(60))
     monto           = Column(Numeric(12, 2), nullable=False)
-    moneda          = Column(String(3), default="PEN")
-    fecha_operacion = Column(DateTime(timezone=True), nullable=False)
-    sync_at         = Column(DateTime(timezone=True), server_default=func.now())
+    es_abono        = Column(Boolean, default=True)
+    fecha           = Column(DateTime(timezone=True), nullable=False)
+    created_at      = Column(DateTime(timezone=True), server_default=func.now())
 
 
 class Tarjeta(Base):
@@ -111,27 +102,26 @@ class Tarjeta(Base):
     created_at         = Column(DateTime(timezone=True), server_default=func.now())
 
 
-class OperacionCliente(Base):
-    __tablename__ = "operaciones_cliente"
+class ClientesOperacion(Base):
+    __tablename__ = "clientes_operaciones"
 
-    id                 = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    cliente_id         = Column(UUID(as_uuid=True), ForeignKey("clientes.id"), nullable=False)
-    cod_cuenta_origen  = Column(String(30))
-    cod_cuenta_destino = Column(String(30))
-    tipo               = Column(String(20))  # pago_cuota / transferencia / recarga
-    monto              = Column(Numeric(12, 2), nullable=False)
-    moneda             = Column(String(3), default="PEN")
-    estado             = Column(String(20), nullable=False, default="pendiente")
-    cod_operacion_core = Column(String(40))
-    created_at         = Column(DateTime(timezone=True), server_default=func.now())
+    id               = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    cliente_id       = Column(UUID(as_uuid=True), nullable=False)
+    tipo_operacion   = Column(String(30))
+    monto            = Column(Numeric(12, 2), nullable=False)
+    descripcion      = Column(String(200))
+    numero_operacion = Column(String(40))
+    estado           = Column(String(20), nullable=False, default="exitosa")
+    fecha            = Column(DateTime(timezone=True), nullable=False)
+    created_at       = Column(DateTime(timezone=True), server_default=func.now())
 
 
 class Notificacion(Base):
     __tablename__ = "notificaciones"
 
     id                = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    destinatario_tipo = Column(String(10), nullable=False)  # asesor / cliente
-    asesor_id         = Column(UUID(as_uuid=True), ForeignKey("asesores.id"))
+    destinatario_tipo = Column(String(10), nullable=False)
+    asesor_id         = Column(UUID(as_uuid=True), ForeignKey("asesores_negocio.id"))
     cliente_id        = Column(UUID(as_uuid=True), ForeignKey("clientes.id"))
     titulo            = Column(String(120), nullable=False)
     cuerpo            = Column(Text)

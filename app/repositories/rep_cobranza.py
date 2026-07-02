@@ -5,37 +5,35 @@ from sqlalchemy.orm import Session
 
 
 def listar_mora(db: Session) -> list[dict]:
-    """Clientes con cuotas vencidas, ordenados por dias de mora desc (RF-75)."""
     rows = db.execute(
         text(
             """
-            SELECT cr.id, cr.cod_cuenta_credito, cr.cliente_id, cr.dias_mora,
-                   cr.saldo_total, c.nombres, c.apellidos, c.numero_documento,
+            SELECT cr.id, cr.id AS cod_cuenta_credito, cr.cliente_id, 0 AS dias_mora,
+                   cr.monto_pendiente, c.nombres, c.apellidos, c.numero_documento,
                    c.telefono
-            FROM cr_creditos cr
+            FROM clientes_creditos cr
             JOIN clientes c ON c.id = cr.cliente_id
-            WHERE cr.dias_mora > 0
-            ORDER BY cr.dias_mora DESC
+            WHERE cr.estado = 'activo' AND cr.monto_pendiente > 0
+            ORDER BY cr.monto_pendiente DESC
             """
         )
     ).mappings().all()
     return [
         {
             "id": str(r["id"]),
-            "cod_cuenta_credito": r["cod_cuenta_credito"],
+            "cod_cuenta_credito": str(r["cod_cuenta_credito"]),
             "cliente_id": str(r["cliente_id"]),
             "cliente_nombre": f"{r['nombres']} {r['apellidos']}",
             "documento": r["numero_documento"],
             "telefono": r["telefono"],
             "dias_mora": r["dias_mora"],
-            "monto_vencido": float(r["saldo_total"] or 0),
+            "monto_vencido": float(r["monto_pendiente"] or 0),
         }
         for r in rows
     ]
 
 
 def registrar_accion(db: Session, asesor_id: str, d: dict) -> None:
-    """Registra una gestion de cobranza (RF-77)."""
     db.execute(
         text(
             """

@@ -1,12 +1,10 @@
-"""Schemas Pydantic del lado app de clientes."""
 from datetime import date, datetime
 from uuid import UUID
 from pydantic import BaseModel, ConfigDict
 
 
-# ── Autenticación ──────────────────────────────────────────────
 class LoginClienteIn(BaseModel):
-    numero_documento: str   # DNI (= usuarios_cliente.username)
+    numero_documento: str
     password: str
 
 
@@ -27,61 +25,55 @@ class TokenClienteOut(BaseModel):
     cliente: ClienteOut
 
 
-# ── Productos ──────────────────────────────────────────────────
 class CuentaAhorroOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: UUID
-    cod_cuenta_ahorro: str
     tipo_cuenta: str | None = None
     moneda: str | None = None
-    saldo_capital: float | None = None
-    saldo_interes: float | None = None
-    tea: float | None = None
+    saldo: float | None = None
+    saldo_disponible: float | None = None
+    saldo_contable: float | None = None
+    es_principal: bool | None = None
     estado: str | None = None
 
 
 class CreditoOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: UUID
-    cod_cuenta_credito: str
     producto: str | None = None
-    monto_desembolsado: float | None = None
-    saldo_capital: float | None = None
-    saldo_total: float | None = None
-    dias_mora: int = 0
-    calificacion_interna: str | None = None
-    estado: str | None = None
-    fecha_desembolso: date | None = None
+    nombre_producto: str | None = None
+    monto_original: float | None = None
+    monto_pendiente: float | None = None
+    cuota_mensual: float | None = None
+    proxima_fecha_pago: date | None = None
+    tea_referencial: float | None = None
     tea: float | None = None
-    cuotas_total: int | None = None
-    cuotas_pagadas: int | None = None
+    estado: str | None = None
+    activo: bool | None = None
+    fecha_desembolso: date | None = None
 
 
 class CuotaOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: UUID
-    cod_cuenta_credito: str
-    nro_cuota: int
+    credito_id: UUID
+    numero_cuota: int
     fecha_vencimiento: date
-    monto_cuota: float | None = None
-    monto_capital: float | None = None
-    monto_interes: float | None = None
-    saldo: float | None = None
-    estado_cuota: str | None = None
+    monto: float | None = None
+    estado: str | None = None
     fecha_pago: date | None = None
 
 
 class MovimientoOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: UUID
-    cod_operacion: str
-    cod_cuenta: str | None = None
-    tipo: str | None = None      # DEB / CRE / TRF
-    concepto: str | None = None
-    canal: str | None = None
+    cuenta_id: UUID | None = None
+    descripcion: str | None = None
+    categoria: str | None = None
+    referencia: str | None = None
     monto: float
-    moneda: str | None = None
-    fecha_operacion: datetime
+    es_abono: bool | None = None
+    fecha: datetime
 
 
 class TarjetaOut(BaseModel):
@@ -106,11 +98,10 @@ class NotificacionOut(BaseModel):
     created_at: datetime
 
 
-# ── Operaciones iniciadas por el cliente ───────────────────────
 class OperacionIn(BaseModel):
-    cod_cuenta_origen: str
+    cod_cuenta_origen: str | None = None
     cod_cuenta_destino: str | None = None
-    tipo: str   # pago_cuota / transferencia / recarga
+    tipo: str = "OPERACION"
     monto: float
     moneda: str = "PEN"
 
@@ -118,10 +109,9 @@ class OperacionIn(BaseModel):
 class OperacionOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: UUID
-    cod_cuenta_origen: str | None = None
-    cod_cuenta_destino: str | None = None
-    tipo: str | None = None
+    tipo_operacion: str | None = None
     monto: float
-    moneda: str | None = None
+    descripcion: str | None = None
+    numero_operacion: str | None = None
     estado: str
     created_at: datetime

@@ -1,10 +1,3 @@
-"""
-Seed de datos para la Ficha del Cliente (M3): enriquece clientes demo,
-agrega creditos historicos (cr_creditos) y una oferta preaprobada.
-
-Uso (raiz del proyecto, venv activo):
-    python -m scripts.seed_ficha
-"""
 import sys, os, uuid
 from datetime import date, timedelta
 
@@ -17,12 +10,11 @@ from app.core.cfg_database import SessionLocal
 def run():
     db = SessionLocal()
     try:
-        ya = db.execute(text("SELECT COUNT(*) FROM cr_creditos")).scalar()
+        ya = db.execute(text("SELECT COUNT(*) FROM clientes_creditos")).scalar()
         if ya and ya > 0:
-            print("seed_ficha ya aplicado (cr_creditos tiene datos). Nada que hacer.")
+            print("seed_ficha ya aplicado (clientes_creditos tiene datos). Nada que hacer.")
             return
 
-        # Enriquece datos de negocio + calificacion SBS de los clientes demo.
         negocios = {
             "44455667": ("Bodega", "Bodega Maria", 48, "DUDOSO"),
             "41112233": ("Comercio", "Ferreteria Jose", 72, "NORMAL"),
@@ -47,46 +39,41 @@ def run():
         idx = {c["numero_documento"]: str(c["id"]) for c in clientes}
 
         hoy = date.today()
-        # (doc, producto, desembolsado, saldo, dias_mora, estado, tea, cuotas, pagadas)
         creditos = [
-            ("44455667", "Microcredito", 10000, 6200, 45, "vencido", 42.5, 18, 9),
-            ("44455667", "Microcredito", 5000, 0, 0, "pagado", 39.0, 12, 12),
-            ("41112233", "Microcredito", 15000, 9000, 0, "vigente", 38.0, 24, 10),
-            ("42778899", "Consumo", 6000, 3500, 12, "vigente", 45.0, 12, 6),
-            ("40556677", "Microcredito", 8000, 0, 0, "pagado", 40.0, 18, 18),
+            ("44455667", "Microcredito", 10000, 6200, "activo", 42.5),
+            ("44455667", "Microcredito", 5000, 0,    "pagado", 39.0),
+            ("41112233", "Microcredito", 15000, 9000, "activo", 38.0),
+            ("42778899", "Consumo",      6000, 3500,  "activo", 45.0),
+            ("40556677", "Microcredito", 8000, 0,     "pagado", 40.0),
         ]
-        for i, (doc, prod, des, saldo, mora, estado, tea, ct, cp) in enumerate(creditos):
+        for i, (doc, prod, original, pendiente, estado, tea) in enumerate(creditos):
             cid = idx.get(doc)
             if not cid:
                 continue
             db.execute(
                 text(
-                    """INSERT INTO cr_creditos
-                       (id, cod_cuenta_credito, cliente_id, producto, monto_desembolsado,
-                        saldo_capital, saldo_total, dias_mora, calificacion_interna, estado,
-                        fecha_desembolso, tea, cuotas_total, cuotas_pagadas)
-                       VALUES (:id,:cod,:cli,:prod,:des,:scap,:stot,:mora,:cal,:est,
-                               :fec,:tea,:ct,:cp)"""
+                    """INSERT INTO clientes_creditos
+                       (id, cliente_id, producto, nombre_producto, monto_original,
+                        monto_pendiente, cuota_mensual, proxima_fecha_pago,
+                        tea_referencial, tea, progreso_pago, estado, activo, fecha_desembolso)
+                       VALUES (:id,:cli,:prod,:prod,:original,:pend,:cuota,:prox,
+                               :tea,:tea,0,:est,:act,:fec)"""
                 ),
                 {
                     "id": str(uuid.uuid4()),
-                    "cod": f"CC{1000+i}",
                     "cli": cid,
                     "prod": prod,
-                    "des": des,
-                    "scap": saldo,
-                    "stot": saldo,
-                    "mora": mora,
-                    "cal": "Normal" if mora == 0 else "Deficiente",
-                    "est": estado,
-                    "fec": hoy - timedelta(days=300 - i * 20),
+                    "original": original,
+                    "pend": pendiente,
+                    "cuota": round(original / 12, 2),
+                    "prox": hoy + timedelta(days=30),
                     "tea": tea,
-                    "ct": ct,
-                    "cp": cp,
+                    "est": "activo" if estado == "activo" else "pagado",
+                    "act": True if estado == "activo" else False,
+                    "fec": hoy - timedelta(days=300 - i * 20),
                 },
             )
 
-        # Oferta preaprobada vigente para Jose (buen historial).
         jose = idx.get("41112233")
         if jose:
             db.execute(

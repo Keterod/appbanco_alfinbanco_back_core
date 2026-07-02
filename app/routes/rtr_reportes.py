@@ -22,7 +22,6 @@ def productividad(
     db: Session = Depends(get_db),
     asesor: dict = Depends(get_current_asesor),
 ):
-    """Reporte de productividad mensual por asesor (M11 / RF-80)."""
     rows = db.execute(
         text(
             """
@@ -32,7 +31,7 @@ def productividad(
                    COUNT(*) FILTER (WHERE s.estado = 'desembolsada')   AS desembolsadas,
                    COALESCE(SUM(s.monto_solicitado), 0)                AS monto_total
             FROM solicitudes_credito s
-            JOIN asesores a ON a.id = s.asesor_id
+            JOIN asesores_negocio a ON a.id = s.asesor_id
             WHERE date_trunc('month', s.created_at) = date_trunc('month', now())
             GROUP BY a.nombres, a.apellidos
             ORDER BY enviadas DESC

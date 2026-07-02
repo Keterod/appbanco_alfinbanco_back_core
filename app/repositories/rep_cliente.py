@@ -1,9 +1,8 @@
-"""Repositorio del lado app de clientes — consultas sobre bd_core_mobile."""
 from sqlalchemy.orm import Session
 from app.models.mdl_clientes import Cliente
 from app.models.mdl_cliente_mobile import (
-    UsuarioCliente, CrCuentaAhorro, CrCredito, CrCronogramaPago,
-    CrMovimiento, Tarjeta, OperacionCliente, Notificacion,
+    UsuarioCliente, ClientesCuenta, ClientesCredito, ClientesCronogramaPago,
+    ClientesMovimiento, Tarjeta, ClientesOperacion, Notificacion,
 )
 
 
@@ -17,28 +16,28 @@ def get_cliente(db: Session, cliente_id: str) -> Cliente | None:
     return db.query(Cliente).filter(Cliente.id == cliente_id).first()
 
 
-def cuentas_ahorro(db: Session, cliente_id: str) -> list[CrCuentaAhorro]:
-    return db.query(CrCuentaAhorro).filter(
-        CrCuentaAhorro.cliente_id == cliente_id
-    ).order_by(CrCuentaAhorro.cod_cuenta_ahorro.asc()).all()
+def cuentas_ahorro(db: Session, cliente_id: str) -> list[ClientesCuenta]:
+    return db.query(ClientesCuenta).filter(
+        ClientesCuenta.cliente_id == cliente_id
+    ).order_by(ClientesCuenta.created_at.asc()).all()
 
 
-def creditos(db: Session, cliente_id: str) -> list[CrCredito]:
-    return db.query(CrCredito).filter(
-        CrCredito.cliente_id == cliente_id
-    ).order_by(CrCredito.fecha_desembolso.desc().nullslast()).all()
+def creditos(db: Session, cliente_id: str) -> list[ClientesCredito]:
+    return db.query(ClientesCredito).filter(
+        ClientesCredito.cliente_id == cliente_id
+    ).order_by(ClientesCredito.fecha_desembolso.desc().nullslast()).all()
 
 
-def cronograma(db: Session, cod_cuenta_credito: str) -> list[CrCronogramaPago]:
-    return db.query(CrCronogramaPago).filter(
-        CrCronogramaPago.cod_cuenta_credito == cod_cuenta_credito
-    ).order_by(CrCronogramaPago.nro_cuota.asc()).all()
+def cronograma(db: Session, credito_id: str) -> list[ClientesCronogramaPago]:
+    return db.query(ClientesCronogramaPago).filter(
+        ClientesCronogramaPago.credito_id == credito_id
+    ).order_by(ClientesCronogramaPago.numero_cuota.asc()).all()
 
 
-def movimientos(db: Session, cliente_id: str, limit: int = 20) -> list[CrMovimiento]:
-    return db.query(CrMovimiento).filter(
-        CrMovimiento.cliente_id == cliente_id
-    ).order_by(CrMovimiento.fecha_operacion.desc()).limit(limit).all()
+def movimientos(db: Session, cliente_id: str, limit: int = 20) -> list[ClientesMovimiento]:
+    return db.query(ClientesMovimiento).filter(
+        ClientesMovimiento.cliente_id == cliente_id
+    ).order_by(ClientesMovimiento.fecha.desc()).limit(limit).all()
 
 
 def tarjetas(db: Session, cliente_id: str) -> list[Tarjeta]:
@@ -54,14 +53,13 @@ def notificaciones(db: Session, cliente_id: str, limit: int = 30) -> list[Notifi
     ).order_by(Notificacion.created_at.desc()).limit(limit).all()
 
 
-def crear_operacion(db: Session, cliente_id: str, data: dict) -> OperacionCliente:
-    op = OperacionCliente(
+def crear_operacion(db: Session, cliente_id: str, data: dict) -> ClientesOperacion:
+    op = ClientesOperacion(
         cliente_id=cliente_id,
-        cod_cuenta_origen=data.get("cod_cuenta_origen"),
-        cod_cuenta_destino=data.get("cod_cuenta_destino"),
-        tipo=data.get("tipo"),
-        monto=data.get("monto"),
-        moneda=data.get("moneda", "PEN"),
+        tipo_operacion=data.get("tipo", "OPERACION"),
+        monto=data.get("monto", 0),
+        descripcion=data.get("descripcion", ""),
+        numero_operacion=data.get("numero_operacion"),
         estado="pendiente",
     )
     db.add(op)

@@ -18,7 +18,7 @@ def resumen(db: Session, asesor_id: str) -> dict:
                 COALESCE(SUM(s.monto_aprobado) FILTER (WHERE s.estado = 'desembolsada'), 0)::float AS monto_desembolsado_total,
                 COALESCE(SUM(s.monto_aprobado) FILTER (WHERE s.estado = 'desembolsada'
                     AND date_trunc('month', s.fecha_desembolso) = date_trunc('month', now())), 0)::float AS monto_desembolsado_mes,
-                COALESCE((SELECT COUNT(*)::int FROM cr_creditos WHERE estado = 'vigente'), 0) AS creditos_activos,
+                COALESCE((SELECT COUNT(*)::int FROM clientes_creditos WHERE estado = 'activo'), 0) AS creditos_activos,
                 COALESCE((SELECT COUNT(DISTINCT s2.cliente_id)::int FROM solicitudes_credito s2), 0) AS clientes_atendidos
             FROM solicitudes_credito s
             """

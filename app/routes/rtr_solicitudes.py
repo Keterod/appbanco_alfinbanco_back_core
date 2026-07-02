@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 from app.core.cfg_database import get_db
 from app.core.cfg_auth import get_current_asesor
 from app.schemas.sch_solicitudes import (
-    SolicitudIn, SolicitudCreada, SolicitudResumen,
+    SolicitudIn, SolicitudCreada,
     CondicionarSolicitudIn, RechazarSolicitudIn,
 )
 from app.repositories import rep_solicitudes
@@ -34,7 +34,7 @@ def crear_solicitud(
     )
 
 
-@router.get("", response_model=list[SolicitudResumen])
+@router.get("")
 def listar_solicitudes(
     db: Session = Depends(get_db),
     asesor: dict = Depends(get_current_asesor),

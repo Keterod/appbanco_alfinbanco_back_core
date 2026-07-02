@@ -7,7 +7,7 @@ class CarteraDiaria(Base):
     __tablename__ = "cartera_diaria"
 
     id                 = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    asesor_id          = Column(UUID(as_uuid=True), ForeignKey("asesores.id"), nullable=False)
+    asesor_id          = Column(UUID(as_uuid=True), ForeignKey("asesores_negocio.id"), nullable=False)
     cliente_id         = Column(UUID(as_uuid=True), ForeignKey("clientes.id"), nullable=False)
     agencia_id         = Column(UUID(as_uuid=True), ForeignKey("agencias.id"))
     fecha_asignacion   = Column(Date, nullable=False)
