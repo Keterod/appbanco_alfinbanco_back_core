@@ -1,4 +1,4 @@
-# Core Mobile — Banco Andino (FastAPI)
+# Core Mobile — Banco Alfin (FastAPI)
 
 Capa operacional de canales moviles. La consumen la **app Flutter de fuerza de
 ventas** y la **app de clientes (appbanco_s8)**. Alimenta al nucleo
